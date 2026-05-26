@@ -51,6 +51,14 @@ def main():
         print("[updater] No hay remote 'origin'. Si clonaste el repo, comprueba.")
         return True
 
+    r = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, cwd=BASE_DIR
+    )
+    if r.returncode == 0 and r.stdout.strip():
+        branch = r.stdout.strip()
+        print(f"[updater] Rama detectada: {branch}")
+
     print("[updater] Conectando con GitHub...")
     r = subprocess.run(
         ["git", "fetch", "origin"],

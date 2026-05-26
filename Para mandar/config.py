@@ -1,4 +1,4 @@
-r"""config.py  carga de variables de entorno para el bot.
+"""config.py  carga de variables de entorno para el bot.
 
 Lee primero el archivo `.env`. Si alguna variable relacionada con Anthropic (clave o base URL)
 no está definida, intenta obtenerla del archivo de configuración de Claude Code
@@ -49,12 +49,6 @@ MIN_LOT_SIZE = float(os.getenv("MIN_LOT_SIZE", "0.01"))
 DEFAULT_MAGIC = int(os.getenv("DEFAULT_MAGIC", "20240101"))
 CONFIRM_TRADES = os.getenv("CONFIRM_TRADES", "false").lower() in ("true", "1", "yes")
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() in ("true", "1", "yes")
-
-# ---------------------------------------------------------------------------
-# 7️⃣ GitHub auto-update
-# ---------------------------------------------------------------------------
-GITHUB_REPO = os.getenv("GITHUB_REPO", "")
-GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "master")
 
 # ---------------------------------------------------------------------------
 # 3️⃣ Variables de Anthropic (clave y base URL)
