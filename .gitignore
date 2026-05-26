@@ -1,0 +1,27 @@
+# Variables de entorno sensibles — NUNCA subir
+.env
+*.session
+*.session-journal
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Archivos generados por el bot
+processed_messages.csv
+last_processed_id.txt
