@@ -16,9 +16,6 @@ from telethon.tl.types import PeerChannel
 from telethon.errors import RPCError
 import MetaTrader5 as mt5
 
-# Lock for CSV operations to prevent concurrent writes
-CSV_LOCK = asyncio.Lock()
-
 # Cargar configuración desde .env
 from config import (
     TELEGRAM_API_ID,
@@ -92,50 +89,10 @@ def save_last_processed_id(msg_id):
     with open(LAST_PROCESSED_ID_FILE, "w") as f:
         f.write(str(msg_id))
 
-async def save_message_to_csv(msg_id, text, timestamp=None):
-    """Guarda un mensaje en el archivo CSV de mensajes procesados"""
-    # Si no se proporciona timestamp, usar el actual
-    if timestamp is None:
-        timestamp = datetime.now()
-
-    file_exists = os.path.exists(MESSAGES_CSV_FILE)
-
-    async with CSV_LOCK:
-        with open(MESSAGES_CSV_FILE, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            # Escribir encabezado si el archivo no existe
-            if not file_exists:
-                writer.writerow(['message_id', 'text', 'timestamp'])
-            writer.writerow([msg_id, text, timestamp.isoformat()])
-
-def get_all_processed_ids():
-    """Obtiene todos los IDs de mensajes procesados desde el archivo CSV"""
-    import csv
-    message_ids = set()
-
-    if not os.path.exists(MESSAGES_CSV_FILE):
-        return message_ids
-
-    with open(MESSAGES_CSV_FILE, 'r', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        try:
-            next(reader)
-        except:
-            return message_ids
-
-        for row in reader:
-            if len(row) >= 1:
-                try:
-                    message_ids.add(int(row[0]))
-                except:
-                    continue
-
-    return message_ids
-
 # ---------------------------------------------------------------------------
-# Crear cliente Telethon
+# Crear cliente Telethon (dentro de main para tener event loop)
 # ---------------------------------------------------------------------------
-client = TelegramClient("trading_bot", int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+client = None
 
 # ---------------------------------------------------------------------------
 # Función principal
@@ -152,8 +109,43 @@ def _print_banner():
     print(banner)
 
 async def main():
-    global last_processed_id, CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY, ACCOUNT_BALANCE
+    global client, last_processed_id, CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY, ACCOUNT_BALANCE
     _print_banner()
+
+    # Inicializar dentro del event loop (necesario en Python 3.12+)
+    csv_lock = asyncio.Lock()
+    client = TelegramClient("trading_bot", int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+
+    async def save_message_to_csv(msg_id, text, timestamp=None):
+        nonlocal csv_lock
+        if timestamp is None:
+            timestamp = datetime.now()
+        file_exists = os.path.exists(MESSAGES_CSV_FILE)
+        async with csv_lock:
+            with open(MESSAGES_CSV_FILE, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(['message_id', 'text', 'timestamp'])
+                writer.writerow([msg_id, text, timestamp.isoformat()])
+
+    def get_all_processed_ids():
+        message_ids = set()
+        if not os.path.exists(MESSAGES_CSV_FILE):
+            return message_ids
+        with open(MESSAGES_CSV_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            try:
+                next(reader)
+            except:
+                return message_ids
+            for row in reader:
+                if len(row) >= 1:
+                    try:
+                        message_ids.add(int(row[0]))
+                    except:
+                        continue
+        return message_ids
+
     # Cargar último ID procesado desde archivo persistente al iniciar
     last_processed_id = load_last_processed_id()
 
