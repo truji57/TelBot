@@ -194,8 +194,8 @@ async def main():
                 CHANNEL_CONTROL_ENTITY = await client.get_input_entity(CONTROL_CHAT_ID)
                 logger.info(f"Chat de control resuelto: {CONTROL_CHAT_ID}")
             except Exception as e:
-                logger.error(f"No se pudo resolver el chat de control {CONTROL_CHAT_ID}: {e}")
-                raise SystemExit(1)
+                logger.warning(f"No se pudo resolver el chat de control {CONTROL_CHAT_ID}: {e}. Comandos deshabilitados.")
+                CHANNEL_CONTROL_ENTITY = None
     else:
         logger.info("CONTROL_CHAT_ID no configurado — comandos deshabilitados")
 
