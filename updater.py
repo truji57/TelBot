@@ -8,7 +8,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 CACHE_FILE = BASE_DIR / ".update_cache"
-UPDATE_INTERVAL = 3600  # segundos entre comprobaciones (1 hora)
+UPDATE_INTERVAL = 86400  # segundos entre comprobaciones (24 horas)
 
 def _load_cache():
     try:
@@ -59,7 +59,7 @@ def main():
         branch = r.stdout.strip()
 
     # Comprobación ligera con ls-remote (solo trae las cabezas, sin objetos)
-    r = _run(["git", "ls-remote", "origin", branch], timeout=15)
+    r = _run(["git", "ls-remote", "origin", branch], timeout=8)
     if r is None or r.returncode != 0:
         return True
 
