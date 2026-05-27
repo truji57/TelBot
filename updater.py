@@ -2,13 +2,16 @@
 
 import os
 import sys
-import subprocess
+import json
 import time
+import subprocess
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 CACHE_FILE = BASE_DIR / ".update_cache"
-UPDATE_INTERVAL = 86400  # segundos entre comprobaciones (24 horas)
+UPDATE_INTERVAL = 86400  # 24h entre comprobaciones
 
 def _load_cache():
     try:
@@ -24,11 +27,23 @@ def _save_cache():
     except:
         pass
 
-def _run(cmd, timeout=10):
+def _latest_remote_commit(repo, branch):
+    """Obtiene el SHA del último commit via API HTTP de GitHub (rápido)."""
+    url = f"https://api.github.com/repos/{repo}/commits/{branch}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TelBot/1.0"})
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, cwd=BASE_DIR, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return None
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+            return data.get("sha", "")
+    except:
+        return ""
+
+def _git(*args, timeout=10):
+    try:
+        r = subprocess.run(["git", *args], capture_output=True, text=True, cwd=BASE_DIR, timeout=timeout)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except:
+        return ""
 
 def main():
     repo = os.getenv("GITHUB_REPO", "")
@@ -46,56 +61,54 @@ def main():
     if not repo:
         return True
 
-    # Saltar si ya comprobamos hace menos de UPDATE_INTERVAL
-    last_check = _load_cache()
-    if time.time() - last_check < UPDATE_INTERVAL:
+    # Saltar si ya comprobamos hace menos de 24h
+    if time.time() - _load_cache() < UPDATE_INTERVAL:
         return True
 
-    if _run(["git", "--version"]) is None:
+    local = _git("rev-parse", "HEAD")
+    if not local:
         return True
 
-    r = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    if r and r.returncode == 0 and r.stdout.strip():
-        branch = r.stdout.strip()
+    # Detectar rama activa
+    detected = _git("rev-parse", "--abbrev-ref", "HEAD")
+    if detected:
+        branch = detected
 
-    # Comprobación ligera con ls-remote (solo trae las cabezas, sin objetos)
-    r = _run(["git", "ls-remote", "origin", branch], timeout=8)
-    if r is None or r.returncode != 0:
-        return True
+    # Comprobación vía API HTTP (mucho más rápida que git ls-remote)
+    remote = _latest_remote_commit(repo, branch)
+    if not remote:
+        return True  # sin conexión o error, lo intentamos en 24h
 
-    remote_commit = r.stdout.strip().split()[0] if r.stdout.strip() else ""
-
-    r = _run(["git", "rev-parse", "HEAD"])
-    local_commit = r.stdout.strip() if r and r.returncode == 0 else ""
-
-    if not remote_commit or not local_commit or remote_commit == local_commit:
+    if remote == local:
         _save_cache()
         return True
 
     # Hay cambios — hacer fetch + pull
-    print(f"[updater] Actualización disponible en {repo}. Descargando...")
+    import urllib.parse
+    owner, repo_name = repo.split("/")
 
-    r = _run(["git", "fetch", "origin"], timeout=30)
-    if r is None or r.returncode != 0:
-        print("[updater] Error al descargar. Se reintentará en el próximo arranque.")
+    print(f"[updater] Nueva versión disponible. Descargando...")
+
+    r = subprocess.run(["git", "fetch", "origin"], capture_output=True, text=True, cwd=BASE_DIR, timeout=60)
+    if r.returncode != 0:
+        print(f"[updater] Error al descargar: {r.stderr.strip()}")
         return False
 
-    r = _run(["git", "status", "--porcelain"])
-    has_changes = r and bool(r.stdout.strip())
+    has_changes = bool(_git("status", "--porcelain"))
     stashed = False
     if has_changes:
-        r = _run(["git", "stash"])
-        stashed = r is not None and r.returncode == 0
+        r = subprocess.run(["git", "stash"], capture_output=True, text=True, cwd=BASE_DIR)
+        stashed = r.returncode == 0
 
-    r = _run(["git", "pull", "--ff-only"], timeout=30)
-    if r is None or r.returncode != 0:
-        print(f"[updater] Error al actualizar:\n{r.stderr.strip() if r else 'timeout'}")
+    r = subprocess.run(["git", "pull", "--ff-only"], capture_output=True, text=True, cwd=BASE_DIR, timeout=60)
+    if r.returncode != 0:
+        print(f"[updater] Error al actualizar: {r.stderr.strip()}")
         return False
 
     print("[updater] ¡Actualizado!")
 
     if stashed:
-        _run(["git", "stash", "pop"])
+        subprocess.run(["git", "stash", "pop"], capture_output=True, text=True, cwd=BASE_DIR)
 
     _save_cache()
     return True
