@@ -3,13 +3,36 @@
 import os
 import sys
 import subprocess
+import time
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
+CACHE_FILE = BASE_DIR / ".update_cache"
+UPDATE_INTERVAL = 3600  # segundos entre comprobaciones (1 hora)
+
+def _load_cache():
+    try:
+        if CACHE_FILE.is_file():
+            return int(CACHE_FILE.read_text().strip())
+    except:
+        pass
+    return 0
+
+def _save_cache():
+    try:
+        CACHE_FILE.write_text(str(int(time.time())))
+    except:
+        pass
+
+def _run(cmd, timeout=10):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=BASE_DIR, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
 
 def main():
     repo = os.getenv("GITHUB_REPO", "")
-    branch = os.getenv("GITHUB_BRANCH", "main")
+    branch = os.getenv("GITHUB_BRANCH", "master")
 
     try:
         import config
@@ -21,97 +44,60 @@ def main():
         pass
 
     if not repo:
-        print("[updater] GITHUB_REPO no configurado en .env. Saltando.")
         return True
 
-    print(f"[updater] Buscando actualizaciones en {repo} (rama: {branch})...")
-
-    try:
-        r = subprocess.run(["git", "--version"], capture_output=True, text=True)
-        if r.returncode != 0:
-            print("[updater] Git no instalado. Saltando.")
-            return True
-    except FileNotFoundError:
-        print("[updater] Git no encontrado. Saltando.")
+    # Saltar si ya comprobamos hace menos de UPDATE_INTERVAL
+    last_check = _load_cache()
+    if time.time() - last_check < UPDATE_INTERVAL:
         return True
 
-    r = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode != 0:
-        print("[updater] No es un repositorio git. Haz 'git clone' primero.")
+    if _run(["git", "--version"]) is None:
         return True
 
-    r = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode != 0:
-        print("[updater] No hay remote 'origin'. Si clonaste el repo, comprueba.")
-        return True
-
-    r = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode == 0 and r.stdout.strip():
+    r = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    if r and r.returncode == 0 and r.stdout.strip():
         branch = r.stdout.strip()
-        print(f"[updater] Rama detectada: {branch}")
 
-    print("[updater] Conectando con GitHub...")
-    r = subprocess.run(
-        ["git", "fetch", "origin"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode != 0:
-        print(f"[updater] Error al conectar con GitHub:\n{r.stderr.strip()}")
+    # Comprobación ligera con ls-remote (solo trae las cabezas, sin objetos)
+    r = _run(["git", "ls-remote", "origin", branch], timeout=15)
+    if r is None or r.returncode != 0:
+        return True
+
+    remote_commit = r.stdout.strip().split()[0] if r.stdout.strip() else ""
+
+    r = _run(["git", "rev-parse", "HEAD"])
+    local_commit = r.stdout.strip() if r and r.returncode == 0 else ""
+
+    if not remote_commit or not local_commit or remote_commit == local_commit:
+        _save_cache()
+        return True
+
+    # Hay cambios — hacer fetch + pull
+    print(f"[updater] Actualización disponible en {repo}. Descargando...")
+
+    r = _run(["git", "fetch", "origin"], timeout=30)
+    if r is None or r.returncode != 0:
+        print("[updater] Error al descargar. Se reintentará en el próximo arranque.")
         return False
 
-    r = subprocess.run(
-        ["git", "rev-list", "--count", f"HEAD..origin/{branch}"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode != 0:
-        print(f"[updater] No se pudo verificar la rama '{branch}'.")
-        return True
-
-    behind = int(r.stdout.strip())
-    if behind == 0:
-        print("[updater] Ya tienes la última versión.")
-        return True
-
-    print(f"[updater] {behind} actualización(es) disponible(s). Descargando...")
-
-    r = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    has_changes = bool(r.stdout.strip())
+    r = _run(["git", "status", "--porcelain"])
+    has_changes = r and bool(r.stdout.strip())
     stashed = False
     if has_changes:
-        print("[updater] Guardando cambios locales temporalmente...")
-        r = subprocess.run(
-            ["git", "stash"],
-            capture_output=True, text=True, cwd=BASE_DIR
-        )
-        stashed = r.returncode == 0
+        r = _run(["git", "stash"])
+        stashed = r is not None and r.returncode == 0
 
-    r = subprocess.run(
-        ["git", "pull", "--ff-only"],
-        capture_output=True, text=True, cwd=BASE_DIR
-    )
-    if r.returncode != 0:
-        print(f"[updater] Error al actualizar:\n{r.stderr.strip()}")
-        print("[updater] Puede que tengas cambios locales en conflicto.")
+    r = _run(["git", "pull", "--ff-only"], timeout=30)
+    if r is None or r.returncode != 0:
+        print(f"[updater] Error al actualizar:\n{r.stderr.strip() if r else 'timeout'}")
         return False
 
-    print(f"[updater] ¡Actualizado! Se descargaron {behind} cambio(s).")
+    print("[updater] ¡Actualizado!")
 
     if stashed:
-        print("[updater] Restaurando cambios locales...")
-        subprocess.run(["git", "stash", "pop"], capture_output=True, cwd=BASE_DIR)
+        _run(["git", "stash", "pop"])
 
+    _save_cache()
     return True
 
 if __name__ == "__main__":

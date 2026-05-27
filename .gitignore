@@ -25,6 +25,7 @@ Thumbs.db
 # Archivos generados por el bot
 processed_messages.csv
 last_processed_id.txt
+.update_cache
 
 # Archivos personales de desarrollo (no necesarios para ejecutar el bot)
 NO NECESARIO 2/
