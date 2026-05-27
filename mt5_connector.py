@@ -321,3 +321,288 @@ __all__ = [
     "send_order",
     "_translate_symbol",
 ]
+
+# ---------------------------------------------------------------------------
+# Funciones para control de posiciones y órdenes (comandos)
+# ---------------------------------------------------------------------------
+
+def get_account_status() -> Dict[str, Any]:
+    """Devuelve estado actual de la cuenta MT5."""
+    info = mt5.account_info()
+    if info is None:
+        return {"error": "No se pudo obtener información de la cuenta"}
+    
+    positions = mt5.positions_get()
+    if positions is None:
+        positions = []
+    
+    orders = mt5.orders_get()
+    if orders is None:
+        orders = []
+    
+    total_profit = sum(p.profit for p in positions)
+    
+    return {
+        "balance": info.balance,
+        "equity": info.equity,
+        "margin": info.margin,
+        "margin_free": info.margin_free,
+        "profit": total_profit,
+        "positions": len(positions),
+        "pending_orders": len(orders),
+        "server": info.server,
+        "currency": info.currency,
+        "login": info.login,
+    }
+
+
+def close_all_positions() -> List[Dict[str, Any]]:
+    """Cierra todas las posiciones abiertas."""
+    positions = mt5.positions_get()
+    if not positions:
+        return [{"success": False, "message": "No hay posiciones abiertas"}]
+    
+    results = []
+    for pos in positions:
+        ticket = pos.ticket
+        symbol = pos.symbol
+        volume = pos.volume
+        pos_type = pos.type
+        
+        price = mt5.symbol_info_tick(symbol).bid if pos_type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(symbol).ask
+        
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": volume,
+            "type": mt5.ORDER_TYPE_SELL if pos_type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
+            "position": ticket,
+            "price": price,
+            "deviation": 10,
+            "magic": DEFAULT_MAGIC,
+            "comment": "Close by Bot",
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        
+        result = mt5.order_send(request)
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger.info(f"Posición cerrada: ticket={ticket} {symbol}")
+            results.append({"success": True, "ticket": ticket, "symbol": symbol})
+        else:
+            err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+            logger.warning(f"Error al cerrar {ticket}: {err_msg}")
+            results.append({"success": False, "ticket": ticket, "symbol": symbol, "error": err_msg})
+    
+    return results
+
+
+def delete_all_pending_orders() -> List[Dict[str, Any]]:
+    """Elimina todas las órdenes pendientes."""
+    orders = mt5.orders_get()
+    if not orders:
+        return [{"success": False, "message": "No hay órdenes pendientes"}]
+    
+    results = []
+    for order in orders:
+        ticket = order.ticket
+        
+        request = {
+            "action": mt5.TRADE_ACTION_REMOVE,
+            "order": ticket,
+        }
+        
+        result = mt5.order_send(request)
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger.info(f"Orden pendiente eliminada: ticket={ticket}")
+            results.append({"success": True, "ticket": ticket})
+        else:
+            err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+            logger.warning(f"Error al eliminar orden {ticket}: {err_msg}")
+            results.append({"success": False, "ticket": ticket, "error": err_msg})
+    
+    return results
+
+
+def set_breakeven_all() -> List[Dict[str, Any]]:
+    """Mueve el SL de todas las posiciones abiertas al precio de entrada."""
+    positions = mt5.positions_get()
+    if not positions:
+        return [{"success": False, "message": "No hay posiciones abiertas"}]
+    
+    results = []
+    for pos in positions:
+        ticket = pos.ticket
+        symbol = pos.symbol
+        entry_price = pos.price_open
+        volume = pos.volume
+        
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": symbol,
+            "position": ticket,
+            "sl": entry_price,
+            "tp": pos.tp,
+            "magic": DEFAULT_MAGIC,
+            "comment": "Breakeven by Bot",
+        }
+        
+        result = mt5.order_send(request)
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger.info(f"SL movido a breakeven: ticket={ticket} {symbol} @ {entry_price}")
+            results.append({"success": True, "ticket": ticket, "symbol": symbol, "sl": entry_price})
+        else:
+            err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+            logger.warning(f"Error al mover SL de {ticket}: {err_msg}")
+            results.append({"success": False, "ticket": ticket, "symbol": symbol, "error": err_msg})
+    
+    return results
+
+
+def get_open_positions() -> List[Dict[str, Any]]:
+    """Devuelve lista detallada de posiciones abiertas."""
+    positions = mt5.positions_get()
+    if not positions:
+        return []
+
+    result = []
+    for pos in positions:
+        tick = mt5.symbol_info_tick(pos.symbol)
+        current_price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask if tick else 0
+
+        result.append({
+            "ticket": pos.ticket,
+            "symbol": pos.symbol,
+            "type": "BUY" if pos.type == mt5.ORDER_TYPE_BUY else "SELL",
+            "volume": pos.volume,
+            "entry": pos.price_open,
+            "sl": pos.sl,
+            "tp": pos.tp,
+            "current_price": current_price,
+            "profit": pos.profit,
+            "swap": pos.swap,
+            "commission": pos.commission,
+            "magic": pos.magic,
+            "comment": pos.comment,
+        })
+    return result
+
+
+def get_pending_orders() -> List[Dict[str, Any]]:
+    """Devuelve lista detallada de órdenes pendientes."""
+    orders = mt5.orders_get()
+    if not orders:
+        return []
+
+    type_map = {
+        mt5.ORDER_TYPE_BUY_LIMIT: "BUY_LIMIT",
+        mt5.ORDER_TYPE_SELL_LIMIT: "SELL_LIMIT",
+        mt5.ORDER_TYPE_BUY_STOP: "BUY_STOP",
+        mt5.ORDER_TYPE_SELL_STOP: "SELL_STOP",
+    }
+
+    result = []
+    for order in orders:
+        result.append({
+            "ticket": order.ticket,
+            "symbol": order.symbol,
+            "type": type_map.get(order.type, f"UNKNOWN_{order.type}"),
+            "volume": order.volume,
+            "price": order.price,
+            "sl": order.sl,
+            "tp": order.tp,
+            "expiration": order.expiration,
+            "comment": order.comment,
+            "magic": order.magic,
+        })
+    return result
+
+
+def close_position_by_symbol(symbol: str) -> Dict[str, Any]:
+    """Cierra una posición abierta por símbolo."""
+    positions = mt5.positions_get(symbol=symbol)
+    if not positions:
+        return {"success": False, "message": f"No hay posiciones abiertas para {symbol}"}
+
+    pos = positions[0]
+    ticket = pos.ticket
+    volume = pos.volume
+    pos_type = pos.type
+
+    price = mt5.symbol_info_tick(symbol).bid if pos_type == mt5.ORDER_TYPE_BUY else mt5.symbol_info_tick(symbol).ask
+
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": volume,
+        "type": mt5.ORDER_TYPE_SELL if pos_type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
+        "position": ticket,
+        "price": price,
+        "deviation": 10,
+        "magic": DEFAULT_MAGIC,
+        "comment": "Close by Bot",
+        "type_filling": mt5.ORDER_FILLING_IOC,
+    }
+
+    result = mt5.order_send(request)
+    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+        logger.info(f"Posición cerrada: {symbol} ticket={ticket}")
+        return {"success": True, "ticket": ticket, "symbol": symbol}
+
+    err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+    return {"success": False, "symbol": symbol, "error": err_msg}
+
+
+def modify_position_sl(symbol: str, sl_price: float) -> Dict[str, Any]:
+    """Modifica el SL de una posición abierta por símbolo."""
+    positions = mt5.positions_get(symbol=symbol)
+    if not positions:
+        return {"success": False, "message": f"No hay posiciones abiertas para {symbol}"}
+
+    pos = positions[0]
+    ticket = pos.ticket
+
+    request = {
+        "action": mt5.TRADE_ACTION_SLTP,
+        "symbol": symbol,
+        "position": ticket,
+        "sl": sl_price,
+        "tp": pos.tp,
+        "magic": DEFAULT_MAGIC,
+        "comment": "Modify SL by Bot",
+    }
+
+    result = mt5.order_send(request)
+    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+        logger.info(f"SL modificado: {symbol} ticket={ticket} sl={sl_price}")
+        return {"success": True, "ticket": ticket, "symbol": symbol, "sl": sl_price}
+
+    err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+    return {"success": False, "symbol": symbol, "error": err_msg}
+
+
+def modify_position_tp(symbol: str, tp_price: float) -> Dict[str, Any]:
+    """Modifica el TP de una posición abierta por símbolo."""
+    positions = mt5.positions_get(symbol=symbol)
+    if not positions:
+        return {"success": False, "message": f"No hay posiciones abiertas para {symbol}"}
+
+    pos = positions[0]
+    ticket = pos.ticket
+
+    request = {
+        "action": mt5.TRADE_ACTION_SLTP,
+        "symbol": symbol,
+        "position": ticket,
+        "sl": pos.sl,
+        "tp": tp_price,
+        "magic": DEFAULT_MAGIC,
+        "comment": "Modify TP by Bot",
+    }
+
+    result = mt5.order_send(request)
+    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+        logger.info(f"TP modificado: {symbol} ticket={ticket} tp={tp_price}")
+        return {"success": True, "ticket": ticket, "symbol": symbol, "tp": tp_price}
+
+    err_msg = _mt5_error_description(result.retcode) if result else "order_send returned None"
+    return {"success": False, "symbol": symbol, "error": err_msg}

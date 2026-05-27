@@ -23,6 +23,7 @@ from config import (
     TELEGRAM_PHONE,
     SIGNAL_CHANNEL,
     FORWARD_CHAT_ID,
+    CONTROL_CHAT_ID,
     MT5_LOGIN,
     MT5_PASSWORD,
     MT5_SERVER,
@@ -52,6 +53,7 @@ if not (TELEGRAM_API_ID and TELEGRAM_API_HASH):
 # Variables globales para entidades de canales
 CHANNEL_SRC_ENTITY = None
 CHANNEL_FORWARD_ENTITY = None
+CHANNEL_CONTROL_ENTITY = None
 
 # Conjunto global para rastrear IDs de mensajes procesados y evitar duplicados
 PROCESSED_MESSAGES = set()
@@ -105,12 +107,12 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                      v0.03
+                      v0.04
     """
     print(banner)
 
 async def main():
-    global client, last_processed_id, CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY, ACCOUNT_BALANCE
+    global client, last_processed_id, CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY, CHANNEL_CONTROL_ENTITY, ACCOUNT_BALANCE
     _print_banner()
 
     # Inicializar dentro del event loop (necesario en Python 3.12+)
@@ -180,6 +182,22 @@ async def main():
     except Exception as e:
         logger.error(f"No se pudo resolver el canal de destino {FORWARD_CHAT_ID}: {e}")
         raise SystemExit(1)
+
+    # Chat de control (comandos) — opcional
+    if CONTROL_CHAT_ID:
+        try:
+            ctrl_id = int(CONTROL_CHAT_ID)
+            CHANNEL_CONTROL_ENTITY = abs(ctrl_id)
+            logger.info(f"Chat de control configurado: {ctrl_id}")
+        except ValueError:
+            try:
+                CHANNEL_CONTROL_ENTITY = await client.get_input_entity(CONTROL_CHAT_ID)
+                logger.info(f"Chat de control resuelto: {CONTROL_CHAT_ID}")
+            except Exception as e:
+                logger.error(f"No se pudo resolver el chat de control {CONTROL_CHAT_ID}: {e}")
+                raise SystemExit(1)
+    else:
+        logger.info("CONTROL_CHAT_ID no configurado — comandos deshabilitados")
 
     # ---------------------------------------------------------------
     # Conexön a MetaTrader 5 (solo si no es DRY_RUN)
@@ -389,11 +407,32 @@ async def main():
         await client.send_message(event.chat_id, "⚠️ Operación cancelada por el usuario")
 
     # ---------------------------------------------------------------
+    # Handler para comandos de control (/help, /status, ...)
+    # ---------------------------------------------------------------
+    if CONTROL_CHAT_ID and CHANNEL_CONTROL_ENTITY:
+        logger.info(f"Handler de comandos registrado para chat {CONTROL_CHAT_ID}")
+        @client.on(events.NewMessage(chats=CHANNEL_CONTROL_ENTITY))
+        async def control_handler(event):
+            text = event.message.text.strip()
+            if not text.startswith("/"):
+                return
+            from commands import COMMANDS
+            parts = text.split()
+            cmd = parts[0].lower()
+            args = " ".join(parts[1:]) if len(parts) > 1 else ""
+            handler = COMMANDS.get(cmd)
+            if handler:
+                logger.info(f"Comando recibido: {cmd} de {event.chat_id} args={args!r}")
+                await handler(client, event.chat_id, args)
+            else:
+                await client.send_message(event.chat_id, f"❌ Comando desconocido: {cmd}\n\nUsa /help para ver los disponibles.")
+
+    # ---------------------------------------------------------------
     # Función de reconexión compartida
     # ---------------------------------------------------------------
     async def reconnect_client():
         """Reconecta el cliente Telethon y re-resuelve entidades."""
-        global CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY
+        global CHANNEL_SRC_ENTITY, CHANNEL_FORWARD_ENTITY, CHANNEL_CONTROL_ENTITY
         try:
             if client.is_connected():
                 await client.disconnect()
@@ -401,6 +440,10 @@ async def main():
             await client.start(phone=TELEGRAM_PHONE)
             CHANNEL_SRC_ENTITY = await client.get_input_entity(SIGNAL_CHANNEL)
             CHANNEL_FORWARD_ENTITY = await client.get_input_entity(FORWARD_CHAT_ID)
+            if CONTROL_CHAT_ID and CONTROL_CHAT_ID.lstrip("-").isdigit():
+                CHANNEL_CONTROL_ENTITY = abs(int(CONTROL_CHAT_ID))
+            elif CONTROL_CHAT_ID:
+                CHANNEL_CONTROL_ENTITY = await client.get_input_entity(CONTROL_CHAT_ID)
             logger.info("[RECONNECTED] Reconexión exitosa")
             return True
         except Exception as e:

@@ -31,6 +31,7 @@ TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE", "")
 SIGNAL_CHANNEL = os.getenv("SIGNAL_CHANNEL", "")
 FORWARD_CHAT_ID = os.getenv("FORWARD_CHAT_ID", "")
+CONTROL_CHAT_ID = os.getenv("CONTROL_CHAT_ID", "")
 # ---------------------------------------------------------------------------
 # 5️⃣ Configuración de MetaTrader 5
 # ---------------------------------------------------------------------------
