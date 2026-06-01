@@ -33,6 +33,7 @@ from config import (
     MT5_TERMINAL_PATH,
     MT5_INSTANCE_ID,
     DEFAULT_MAGIC,
+    ORDER_COMMENT,
 )
 from risk_manager import (
     calcular_lotes,
@@ -241,7 +242,7 @@ def send_order(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "tp": tp,
         "deviation": 10,
         "magic": DEFAULT_MAGIC,
-        "comment": f"BotSignal {action} {base_symbol}",
+        "comment": ORDER_COMMENT,
         "type_filling": None,  # will be set in loop (filled later)
         "type_time": mt5.ORDER_TIME_GTC,
     }

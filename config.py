@@ -47,7 +47,9 @@ MT5_INSTANCE_ID = os.getenv("MT5_INSTANCE_ID", "default")
 RISK_PERCENT = float(os.getenv("RISK_PERCENT", "1.0"))
 MAX_LOT_SIZE = float(os.getenv("MAX_LOT_SIZE", "1.0"))
 MIN_LOT_SIZE = float(os.getenv("MIN_LOT_SIZE", "0.01"))
-DEFAULT_MAGIC = int(os.getenv("DEFAULT_MAGIC", "20240101"))
+_magic = os.getenv("DEFAULT_MAGIC", "20240101")
+DEFAULT_MAGIC = int(_magic) if _magic.strip() else 0
+ORDER_COMMENT = os.getenv("ORDER_COMMENT", "")
 CONFIRM_TRADES = os.getenv("CONFIRM_TRADES", "false").lower() in ("true", "1", "yes")
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() in ("true", "1", "yes")
 
