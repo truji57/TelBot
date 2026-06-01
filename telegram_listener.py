@@ -30,6 +30,7 @@ from config import (
     MT5_TERMINAL_PATH,
     CONFIRM_TRADES,
     DRY_RUN,
+    RANDOM_OFFSET_TICKS,
 )
 
 # ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                       v0.06
+                       v0.07
     """
     print(banner)
 
@@ -322,6 +323,30 @@ async def main():
                 current_balance = account_info.balance
             else:
                 current_balance = 1
+
+            # 🎲 Random offset anti-group-trading
+            if RANDOM_OFFSET_TICKS > 0:
+                import random
+                tick_size = None
+                try:
+                    info = mt5.symbol_info(symbol)
+                    if info:
+                        tick_size = info.trade_tick_size
+                except:
+                    pass
+                if tick_size is None or tick_size <= 0:
+                    tick_size = 0.01
+                    logger.warning(f"No se pudo obtener tick_size para {symbol}, usando fallback {tick_size}")
+                offset_ticks = random.randint(-RANDOM_OFFSET_TICKS, RANDOM_OFFSET_TICKS)
+                offset_price = offset_ticks * tick_size
+                if offset_price != 0:
+                    entry += offset_price
+                    sl += offset_price
+                    if parsed.get("tp"):
+                        parsed["tp"] = [tp + offset_price for tp in parsed["tp"]]
+                    parsed["entry"] = entry
+                    parsed["sl"] = sl
+                    logger.info(f"Random offset: {offset_ticks} ticks ({offset_price:.5f}) aplicado a entry/SL/TP")
 
             # 3️⃣ Calcular riesgo y tipo de orden
             from risk_manager import calcular_lotes, determine_order_type, build_trade_summary
