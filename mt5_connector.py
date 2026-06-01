@@ -102,8 +102,9 @@ def _get_filling_mode(symbol: str) -> int:
 def _translate_symbol(symbol: str) -> str:
     """Devuelve la representación del símbolo para el broker actual.
 
-    Si ``symbols_map.yaml`` define una variante para ``MT5_SERVER`` se usa;
-    de lo contrario se devuelve el símbolo original.
+    Primero busca en ``symbols_map.yaml`` (con match exacto y luego
+    case‑insensitive). Si no encuentra, consulta los símbolos disponibles
+    en MT5 y busca por prefijo (p.ej. XAUUSD → XAUUSD.raw).
     """
     broker_map = _SYMBOL_MAP.get(symbol)
     if broker_map:
@@ -111,6 +112,27 @@ def _translate_symbol(symbol: str) -> str:
         if mapped:
             logger.debug(f"Mapeo de símbolo: {symbol} → {mapped} (broker {MT5_SERVER})")
             return mapped
+        server_lower = MT5_SERVER.lower()
+        for broker_key, broker_val in broker_map.items():
+            if broker_key.lower() == server_lower:
+                logger.debug(f"Mapeo de símbolo (case-insensitive): {symbol} → {broker_val} (broker {MT5_SERVER})")
+                return broker_val
+
+    # Fallback: buscar en MT5 símbolos disponibles
+    try:
+        mt5_symbols = mt5.symbols_get()
+        if mt5_symbols:
+            mt5_names = {s.name for s in mt5_symbols}
+            if symbol in mt5_names:
+                return symbol
+            prefix_lower = symbol.lower()
+            for mt5_name in mt5_names:
+                if mt5_name.lower().startswith(prefix_lower):
+                    logger.debug(f"Auto-detección de símbolo: {symbol} → {mt5_name}")
+                    return mt5_name
+    except Exception as e:
+        logger.debug(f"Auto-detección de símbolo falló: {e}")
+
     return symbol
 
 # ---------------------------------------------------------------------------

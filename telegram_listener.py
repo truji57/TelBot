@@ -107,7 +107,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                      v0.04
+                       v0.05
     """
     print(banner)
 
@@ -303,6 +303,11 @@ async def main():
             sl = parsed.get("sl")
             action = parsed.get("action")
 
+            # Traducir símbolo para el broker actual (ej: XAUUSD → XAUUSD.raw)
+            from mt5_connector import _translate_symbol
+            symbol = _translate_symbol(symbol)
+            parsed["symbol"] = symbol
+
             if not all([symbol, entry, sl, action]):
                 logger.warning(f"Datos incompletos en señal: {parsed}")
                 await client.send_message(CHANNEL_FORWARD_ENTITY, "Datos incompletos → señal ignorada")
@@ -455,7 +460,7 @@ async def main():
     # ---------------------------------------------------------------
     async def poll_missing_messages():
         """Cada POLLING_INTERVAL segundos revisa el canal en busca de mensajes no procesados.
-        Incluye su propia lógica de reconexión por si el cliente se cae.
+        Si el cliente está desconectado, espera (la reconexión la maneja el bucle principal).
         """
         global last_processed_id, FIRST_POLL_DONE, CHANNEL_SRC_ENTITY
         interval = POLLING_INTERVAL
@@ -469,15 +474,11 @@ async def main():
                 logger.debug(f"[Polling] Ciclo cada {interval}s (limit={limit})")
 
                 if not client.is_connected():
-                    logger.warning("[Polling] Cliente desconectado, intentando reconectar...")
-                    if await reconnect_client():
-                        consecutive_failures = 0
-                        logger.info("[Polling] Reconectado, forzando ciclo de polling ahora")
-                    else:
-                        consecutive_failures += 1
-                        backoff = min(5 * (2 ** (consecutive_failures - 1)), 120)
-                        await asyncio.sleep(backoff)
-                        continue
+                    logger.warning("[Polling] Cliente desconectado, esperando reconexión del bucle principal...")
+                    consecutive_failures += 1
+                    backoff = min(5 * (2 ** (consecutive_failures - 1)), 120)
+                    await asyncio.sleep(backoff)
+                    continue
 
                 msgs = await client.get_messages(CHANNEL_SRC_ENTITY, limit=limit)
 
@@ -534,16 +535,15 @@ async def main():
     while True:
         try:
             await client.run_until_disconnected()
-            logger.info("Cliente desconectado intencionalmente, terminando.")
-            break
+            logger.info("Cliente desconectado intencionalmente, reconectando...")
         except Exception as e:
             connection_attempt += 1
             backoff = min(retry_delay * (2 ** (connection_attempt - 1)), 300)
             logger.error(f"[RECONEXION] Intento {connection_attempt}: {e}. Espera {backoff}s")
             await asyncio.sleep(backoff)
 
-            if await reconnect_client():
-                connection_attempt = 0
+        if await reconnect_client():
+            connection_attempt = 0
 
 
 if __name__ == "__main__":
