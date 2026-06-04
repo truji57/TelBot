@@ -108,7 +108,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                       v0.07
+                       v0.08
     """
     print(banner)
 
@@ -324,7 +324,7 @@ async def main():
             else:
                 current_balance = 1
 
-            # 🎲 Random offset anti-group-trading
+            # 🎲 Random offset anti-group-trading (hacia precio de mercado)
             if RANDOM_OFFSET_TICKS > 0:
                 import random
                 tick_size = None
@@ -337,8 +337,15 @@ async def main():
                 if tick_size is None or tick_size <= 0:
                     tick_size = 0.01
                     logger.warning(f"No se pudo obtener tick_size para {symbol}, usando fallback {tick_size}")
-                offset_ticks = random.randint(-RANDOM_OFFSET_TICKS, RANDOM_OFFSET_TICKS)
-                offset_price = offset_ticks * tick_size
+                abs_offset = random.randint(1, RANDOM_OFFSET_TICKS) * tick_size
+                tick = mt5.symbol_info_tick(symbol)
+                current_price = None
+                if tick:
+                    current_price = (tick.bid + tick.ask) / 2 if tick.bid and tick.ask else (tick.bid or tick.ask)
+                if current_price and current_price > 0:
+                    offset_price = abs_offset if entry < current_price else -abs_offset
+                else:
+                    offset_price = 0
                 if offset_price != 0:
                     entry += offset_price
                     sl += offset_price
@@ -346,7 +353,7 @@ async def main():
                         parsed["tp"] = [tp + offset_price for tp in parsed["tp"]]
                     parsed["entry"] = entry
                     parsed["sl"] = sl
-                    logger.info(f"Random offset: {offset_ticks} ticks ({offset_price:.5f}) aplicado a entry/SL/TP")
+                    logger.info(f"Random offset hacia mercado: {offset_price:.5f} ({abs_offset/tick_size:.0f} ticks) aplicado a entry/SL/TP")
 
             # 3️⃣ Calcular riesgo y tipo de orden
             from risk_manager import calcular_lotes, determine_order_type, build_trade_summary
