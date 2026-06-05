@@ -4,6 +4,10 @@ import os
 import sys
 import json
 import time
+import zipfile
+import shutil
+import io
+import tempfile
 import subprocess
 import urllib.request
 import urllib.error
@@ -44,6 +48,41 @@ def _git(*args, timeout=10):
         return r.stdout.strip() if r.returncode == 0 else ""
     except:
         return ""
+
+def _download_fallback(repo, branch):
+    """Descarga el repo completo como ZIP vía API de GitHub (fallback cuando git falla)."""
+    url = f"https://api.github.com/repos/{repo}/zipball/{branch}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TelBot/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            zip_data = r.read()
+    except:
+        return False
+
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+            zf.extractall(tmp)
+        items = sorted(tmp.iterdir())
+        if not items:
+            return False
+        src = items[0]
+        skip_names = {".env", "logs", "__pycache__", "processed_messages.csv",
+                      "last_processed_id.txt", ".update_cache", ".git",
+                      "CLAUDE.md", "PENDIENTES.md", "instalar.bat", "instalar2.bat",
+                      "run_bot.bat", "install_requirements.bat"}
+        for item in src.iterdir():
+            if item.name in skip_names:
+                continue
+            dest = BASE_DIR / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+        return True
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 
 def main():
     repo = os.getenv("GITHUB_REPO", "")
@@ -92,6 +131,12 @@ def main():
     r = subprocess.run(["git", "fetch", "origin"], capture_output=True, text=True, cwd=BASE_DIR, timeout=60)
     if r.returncode != 0:
         print(f"[updater] Error al descargar: {r.stderr.strip()}")
+        print("[updater] Intentando descarga alternativa vía API...")
+        if _download_fallback(repo, branch):
+            print("[updater] ¡Actualizado vía API!")
+            _save_cache()
+            return True
+        print("[updater] La descarga alternativa también falló.")
         return False
 
     has_changes = bool(_git("status", "--porcelain"))
