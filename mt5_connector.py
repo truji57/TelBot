@@ -34,6 +34,8 @@ from config import (
     MT5_INSTANCE_ID,
     DEFAULT_MAGIC,
     ORDER_COMMENT,
+    ORDER_RETRY_COUNT,
+    ORDER_RETRY_DELAY,
 )
 from risk_manager import (
     calcular_lotes,
@@ -253,6 +255,9 @@ def send_order(parsed: Dict[str, Any]) -> Dict[str, Any]:
     if not mt5.symbol_select(symbol, True):
         logger.warning(f"No se pudo seleccionar/habilitar {symbol} en Market Watch")
 
+    # Retryable error codes (transitorios, pueden resolverse solos)
+    _RETRYABLE_RETCODES = {10006, 10012, 10015, 10020, 10031}
+
     # Intentamos varios modos de llenado (filling) hasta que la orden sea aceptada.
     filling_modes = [
         _get_filling_mode(symbol),
@@ -263,28 +268,42 @@ def send_order(parsed: Dict[str, Any]) -> Dict[str, Any]:
     # Eliminar duplicados y valores None
     filling_modes = [m for i, m in enumerate(filling_modes) if m is not None and m not in filling_modes[:i]]
 
-    for filling in filling_modes:
-        request["type_filling"] = filling
-        logger.info(f"Intentando enviar orden con filling mode {filling} para {symbol}")
-        result = mt5.order_send(request)
-        if result is None:
-            logger.warning(f"order_send devolvió None con filling {filling}")
-            continue
-        if result.retcode == mt5.TRADE_RETCODE_DONE:
-            logger.info(
-                f"Orden ejecutada con éxito: {action} {symbol} lot={lot} price={price} sl={sl} tp={tp} "
-                f"filling={filling} ticket={result.order}"
-            )
-            return {"success": True, "order": result.order, "ticket": result.order}
-        else:
-            retcode_desc = _mt5_error_description(result.retcode)
-            logger.warning(
-                f"Fallo al ejecutar orden con filling {filling}: retcode={result.retcode} ({retcode_desc}), message={result.comment}"
-            )
+    last_retcode = None
+    last_order_result = None
+    for attempt in range(1 + ORDER_RETRY_COUNT):
+        if attempt > 0:
+            logger.info(f"Reintento {attempt}/{ORDER_RETRY_COUNT} tras retcode {last_retcode}...")
+            import time
+            time.sleep(ORDER_RETRY_DELAY)
+
+        for filling in filling_modes:
+            request["type_filling"] = filling
+            logger.info(f"Intentando enviar orden con filling mode {filling} para {symbol} (intento {attempt+1})")
+            result = mt5.order_send(request)
+            if result is None:
+                logger.warning(f"order_send devolvió None con filling {filling}")
+                continue
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(
+                    f"Orden ejecutada con éxito: {action} {symbol} lot={lot} price={price} sl={sl} tp={tp} "
+                    f"filling={filling} ticket={result.order}"
+                )
+                return {"success": True, "order": result.order, "ticket": result.order}
+            else:
+                last_retcode = result.retcode
+                last_order_result = result
+                retcode_desc = _mt5_error_description(last_retcode)
+                logger.warning(
+                    f"Fallo al ejecutar orden con filling {filling}: retcode={last_retcode} ({retcode_desc}), message={result.comment}"
+                )
+
+        if last_retcode is not None and last_retcode not in _RETRYABLE_RETCODES:
+            logger.info(f"Retcode {last_retcode} no es recuperable, no se reintenta.")
+            break
+
     # Si llegamos aquí, todos los intentos fallaron
-    logger.error(f"Todos los modos de filling fallaron para {symbol}")
-    last_err = result.comment if result else "order_send returned None"
-    last_retcode = result.retcode if result else None
+    logger.error(f"Todos los intentos fallaron para {symbol}")
+    last_err = last_order_result.comment if last_order_result else "order_send returned None"
     return {"success": False, "retcode": last_retcode, "message": f"{last_err} (retcode {last_retcode}: {_mt5_error_description(last_retcode)})"}
 
 # ---------------------------------------------------------------------------
