@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 import http.server
 import urllib.parse
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 ENV_FILE = BASE_DIR / ".env"
 ENV_EXAMPLE = BASE_DIR / ".env.example"
-PORT = 8080
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 
 DESCRIPTIONS = {}
 if ENV_EXAMPLE.is_file():
@@ -222,6 +223,7 @@ if __name__ == "__main__":
     server = http.server.HTTPServer(("localhost", PORT), Handler)
     url = f"http://localhost:{PORT}"
     print(f"Panel de configuración abierto en: {url}")
+    print(f"Si el puerto {PORT} está ocupado, usa: python config_panel.py PUERTO")
     webbrowser.open(url)
     print("Presiona Ctrl+C para detener el panel.")
     try:
