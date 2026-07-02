@@ -1,0 +1,9 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "command": {
+    "commit": {
+      "description": "Bump version, update changelog, commit all changes, and push to GitHub",
+      "template": "Increment the version, update CHANGELOG.md, then stage, commit, and push. Steps:\n1. Read CHANGELOG.md, get today's date with PowerShell: Get-Date -Format 'yyyy-MM-dd'\n2. Read telegram_listener.py, find the current version (pattern: vDD.DD in the banner)\n3. Parse vMAJOR.MINOR, increment MINOR by 1, form new version string (e.g., v0.13 → v0.14)\n4. Replace the old version with the new version in telegram_listener.py using edit tool\n5. Prepend a new entry to CHANGELOG.md right after the title line (# Changelog — TelBot):\n   ## vX.YY — YYYY-MM-DD\n   - <USER_MESSAGE>\n   (with a blank line before the next version section)\n6. Stage all files: git add -A\n7. Commit: git commit -m \"vX.YY: <USER_MESSAGE>\"\n8. Push to origin master: git push\n9. Report the new version number to the user.\nIMPORTANT: The user provides the commit message. Use that as both the commit message AND the changelog entry line. Do NOT use --tags (TelBot doesn't use git tags). Bump version and update changelog BEFORE staging."
+    }
+  }
+}
