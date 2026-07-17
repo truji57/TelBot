@@ -3,7 +3,6 @@
 import os
 import sys
 import json
-import time
 import zipfile
 import shutil
 import io
@@ -14,22 +13,7 @@ import urllib.error
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-CACHE_FILE = BASE_DIR / ".update_cache"
-UPDATE_INTERVAL = 86400  # 24h entre comprobaciones
 
-def _load_cache():
-    try:
-        if CACHE_FILE.is_file():
-            return int(CACHE_FILE.read_text().strip())
-    except:
-        pass
-    return 0
-
-def _save_cache():
-    try:
-        CACHE_FILE.write_text(str(int(time.time())))
-    except:
-        pass
 
 def _latest_remote_commit(repo, branch):
     """Obtiene el SHA del último commit via API HTTP de GitHub (rápido)."""
@@ -100,10 +84,6 @@ def main():
     if not repo:
         return True
 
-    # Saltar si ya comprobamos hace menos de 24h
-    if time.time() - _load_cache() < UPDATE_INTERVAL:
-        return True
-
     local = _git("rev-parse", "HEAD")
     if not local:
         return True
@@ -113,13 +93,12 @@ def main():
     if detected:
         branch = detected
 
-    # Comprobación vía API HTTP (mucho más rápida que git ls-remote)
+    # Comprobación vía API HTTP
     remote = _latest_remote_commit(repo, branch)
     if not remote:
-        return True  # sin conexión o error, lo intentamos en 24h
+        return True
 
     if remote == local:
-        _save_cache()
         return True
 
     # Hay cambios — hacer fetch + pull
@@ -134,7 +113,6 @@ def main():
         print("[updater] Intentando descarga alternativa vía API...")
         if _download_fallback(repo, branch):
             print("[updater] ¡Actualizado vía API!")
-            _save_cache()
             return True
         print("[updater] La descarga alternativa también falló.")
         return False
@@ -155,7 +133,6 @@ def main():
     if stashed:
         subprocess.run(["git", "stash", "pop"], capture_output=True, text=True, cwd=BASE_DIR)
 
-    _save_cache()
     return True
 
 if __name__ == "__main__":

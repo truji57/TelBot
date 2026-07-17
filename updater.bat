@@ -4,10 +4,9 @@ echo Comprobando actualizaciones...
 python updater.py
 if errorlevel 1 (
     echo.
-    echo Error en la actualizacion.
-    pause
-    exit /b 1
+    echo No se pudo actualizar.
+) else (
+    echo.
+    echo Listo.
 )
-echo.
-echo Listo.
 pause

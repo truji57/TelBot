@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.15 — 2026-07-17
+- Actualización manual sin caché, run_bot solo arranca sin actualizar
+
 ## v0.14 — 2026-07-02
 - Add: CHANGELOG.md con historial completo de versiones
 - Add: opencode.json con comando `commit` que auto‑bumpea versión, actualiza changelog y hace push
