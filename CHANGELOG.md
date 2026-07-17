@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.19 — 2026-07-17
+- Run_bot solo avisa de actualización, no actualiza automáticamente
+
 ## v0.18 — 2026-07-17
 - Banner con StratiX
 
