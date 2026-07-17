@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.17 — 2026-07-17
+- Aviso de actualización en run_bot al arrancar, sin actualizar automáticamente
+
 ## v0.16 — 2026-07-17
 - Eliminado update_now.bat redundante
 

@@ -69,6 +69,7 @@ def _download_fallback(repo, branch):
 
 
 def main():
+    check_only = "--check" in sys.argv
     repo = os.getenv("GITHUB_REPO", "")
     branch = os.getenv("GITHUB_BRANCH", "master")
 
@@ -96,10 +97,17 @@ def main():
     # Comprobación vía API HTTP
     remote = _latest_remote_commit(repo, branch)
     if not remote:
+        if check_only:
+            sys.exit(0)
         return True
 
     if remote == local:
         return True
+
+    # Modo --check: solo avisar, no actualizar
+    if check_only:
+        print(f"[updater] Nueva versión disponible ({branch}).")
+        sys.exit(1)
 
     # Hay cambios — hacer fetch + pull
     import urllib.parse
