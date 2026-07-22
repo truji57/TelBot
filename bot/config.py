@@ -54,6 +54,7 @@ RANDOM_OFFSET_TICKS = int(os.getenv("RANDOM_OFFSET_TICKS", "0"))
 ORDER_RETRY_COUNT = int(os.getenv("ORDER_RETRY_COUNT", "0"))
 ORDER_RETRY_DELAY = float(os.getenv("ORDER_RETRY_DELAY", "1.0"))
 TP_INDEX = int(os.getenv("TP_INDEX", "0"))
+RR_RATIO = float(os.getenv("RR_RATIO", "0"))
 CONFIRM_TRADES = os.getenv("CONFIRM_TRADES", "false").lower() in ("true", "1", "yes")
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() in ("true", "1", "yes")
 

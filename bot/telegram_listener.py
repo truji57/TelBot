@@ -31,6 +31,7 @@ from config import (
     CONFIRM_TRADES,
     DRY_RUN,
     RANDOM_OFFSET_TICKS,
+    RR_RATIO,
 )
 
 # ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                       v0.22
+                       v0.23
     """
     print(banner)
 
@@ -354,6 +355,17 @@ async def main():
                     parsed["entry"] = entry
                     parsed["sl"] = sl
                     logger.info(f"Random offset hacia mercado: {offset_price:.5f} ({abs_offset/tick_size:.0f} ticks) aplicado a entry/SL/TP")
+
+            # 🎯 Ratio riesgo/beneficio personalizado
+            if RR_RATIO > 0 and action in ("BUY", "SELL"):
+                if action == "BUY":
+                    risk = entry - sl
+                    custom_tp = entry + risk * RR_RATIO
+                else:
+                    risk = sl - entry
+                    custom_tp = entry - risk * RR_RATIO
+                parsed["tp"] = [custom_tp]
+                logger.info(f"RR {RR_RATIO}:1 aplicado → TP={custom_tp:.5f}")
 
             # 3️⃣ Calcular riesgo y tipo de orden
             from risk_manager import calcular_lotes, determine_order_type, build_trade_summary

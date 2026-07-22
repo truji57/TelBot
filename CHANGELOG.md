@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.23 — 2026-07-22
+- RR_RATIO configurable para riesgo/beneficio personalizado
+
 ## v0.22 — 2026-07-22
 - Reorganización del proyecto en carpetas bot/ y data/
 
