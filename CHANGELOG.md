@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.24 — 2026-07-22
+- Crear carpeta data/ al arrancar el bot
+
 ## v0.23 — 2026-07-22
 - RR_RATIO configurable para riesgo/beneficio personalizado
 

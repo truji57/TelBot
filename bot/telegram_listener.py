@@ -38,6 +38,7 @@ from config import (
 # Preparar logging
 # ---------------------------------------------------------------------------
 os.makedirs("logs", exist_ok=True)
+os.makedirs("data", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -109,7 +110,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                       v0.23
+                       v0.24
     """
     print(banner)
 
