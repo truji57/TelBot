@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.21 — 2026-07-17
+- TP_INDEX configurable para elegir TP1, TP2 o TP3
+
 ## v0.20 — 2026-07-17
 - Quitado StratiX del banner
 

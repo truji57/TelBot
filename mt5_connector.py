@@ -36,6 +36,7 @@ from config import (
     ORDER_COMMENT,
     ORDER_RETRY_COUNT,
     ORDER_RETRY_DELAY,
+    TP_INDEX,
 )
 from risk_manager import (
     calcular_lotes,
@@ -196,8 +197,13 @@ def send_order(parsed: Dict[str, Any]) -> Dict[str, Any]:
     entry = parsed.get("entry")  # puede ser None (market)
     sl = parsed.get("sl")
     tp_list: List[float] = parsed.get("tp", [])
-    # tomamos el ÚLTIMO TP de la lista (TP2 o TP3 si existen)
-    tp = tp_list[-1] if tp_list else 0.0
+    # TP_INDEX: 0 = último TP (por defecto), 1/2/3 = TP1/TP2/TP3
+    if TP_INDEX > 0 and len(tp_list) >= TP_INDEX:
+        tp = tp_list[TP_INDEX - 1]
+    elif tp_list:
+        tp = tp_list[-1]
+    else:
+        tp = 0.0
 
     # --- Cálculo del lote (si no está provisto) ---------------------------
     lot = parsed.get("lot_size")
