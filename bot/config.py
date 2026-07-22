@@ -18,7 +18,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # 1️⃣ Cargar .env (si existe)
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 dotenv_path = BASE_DIR / ".env"
 if dotenv_path.is_file():
     load_dotenv(dotenv_path)

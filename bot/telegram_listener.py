@@ -72,10 +72,10 @@ POLLING_INTERVAL = int(os.getenv("POLLING_INTERVAL", "15"))  # Segundos entre re
 MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT", "20"))         # Máximo de mensajes a revisar por ciclo
 
 # Ruta para el archivo de persistencia del último ID procesado
-LAST_PROCESSED_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_processed_id.txt")
+LAST_PROCESSED_ID_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "last_processed_id.txt")
 
 # Ruta para el archivo CSV de mensajes procesados
-MESSAGES_CSV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processed_messages.csv")
+MESSAGES_CSV_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "processed_messages.csv")
 
 def load_last_processed_id():
     """Carga el último ID procesado desde el archivo persistente"""
@@ -108,7 +108,7 @@ def _print_banner():
    ██║   ██╔══╝  ██║     ██╔══██╗██║   ██║   ██║
    ██║   ███████╗███████╗██████╔╝╚██████╔╝   ██║
    ╚═╝   ╚══════╝╚══════╝╚═════╝  ╚═════╝    ╚═╝
-                       v0.21
+                       v0.22
     """
     print(banner)
 

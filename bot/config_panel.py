@@ -9,7 +9,7 @@ import json
 import webbrowser
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 ENV_EXAMPLE = BASE_DIR / ".env.example"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765

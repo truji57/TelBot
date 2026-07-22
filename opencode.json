@@ -1,9 +1,0 @@
-{
-  "$schema": "https://opencode.ai/config.json",
-  "command": {
-    "commit": {
-      "description": "Auto-detect changes, bump version, update changelog, commit, and push",
-      "template": "Detect what changed since the last commit, generate a commit message, increment the version, update CHANGELOG.md, stage, commit, and push. Steps:\n1. Run `git status` and `git diff --stat` to identify ALL changes (modified, new, deleted files)\n2. Look at the actual diff (`git diff` and `git diff --cached`) to understand WHAT changed\n3. Generate a CONCISE commit message (1 line, max 80 chars) summarizing the changes in Spanish. Format: short description of what was added/fixed/changed. Do NOT prefix with vX.YY – that will be added automatically\n4. Get today's date: Get-Date -Format 'yyyy-MM-dd'\n5. Read telegram_listener.py, find the current version (pattern: vDD.DD in the banner)\n6. Parse vMAJOR.MINOR, increment MINOR by 1, form new version string (e.g., v0.13 → v0.14)\n7. Replace the old version with the new version in telegram_listener.py using edit tool\n8. Prepend a new entry to CHANGELOG.md right after `# Changelog — TelBot`:\n   `## vX.YY — YYYY-MM-DD`\n   `- <generated commit message>`\n   (blank line after)\n9. Stage all: git add -A\n10. Commit: git commit -m \"vX.YY: <generated commit message>\"\n11. Push: git push\n12. Report the new version with the commit message.\nRULES:\n- NEVER ask the user for a commit message. Generate it yourself from the diffs\n- Commit message must be in Spanish, 1 line, concise\n- If no changes to commit, report it and stop\n- Do NOT use git tags\n- Bump version and update changelog BEFORE staging"
-    }
-  }
-}

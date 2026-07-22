@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 REM Comprobar si hay actualizaciones disponibles
-python updater.py --check
+python bot\updater.py --check
 if %ERRORLEVEL% EQU 1 (
     echo.
     echo ========================================
@@ -12,7 +12,7 @@ if %ERRORLEVEL% EQU 1 (
     echo.
 )
 
-python telegram_listener.py
+python bot\telegram_listener.py
 
 echo.
 echo ******* Bot detenido *******

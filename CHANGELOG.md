@@ -1,5 +1,8 @@
 # Changelog — TelBot
 
+## v0.22 — 2026-07-22
+- Reorganización del proyecto en carpetas bot/ y data/
+
 ## v0.21 — 2026-07-17
 - TP_INDEX configurable para elegir TP1, TP2 o TP3
 
